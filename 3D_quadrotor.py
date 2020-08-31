@@ -196,13 +196,13 @@ errors = fig.add_subplot(1, 2, 2)
 
 track.plot(x_l[:, 0], x_l[:, 2], x_l[:, 4], color="r", label="linear")
 track.plot(x_nl[:, 0], x_nl[:, 2], x_nl[:, 4], color="g", label="nonlinear")
-track.plot(signalx, signaly, signalz, color="b", label="command")
 if args.waypoints:
     for w in args.waypoints:
         track.plot(w[0:1], w[1:2], w[2:3], 'ro', markersize=10.)
 else:
     track.text(signalx[0], signaly[0], signalz[0], "start", color='red')
     track.text(signalx[-1], signaly[-1], signalz[-1], "finish", color='red')
+    track.plot(signalx, signaly, signalz, color="b", label="command")
 track.set_title(
     "Closed Loop response with LQR Controller to random input signal {3D}")
 track.set_xlabel('x')
