@@ -12,7 +12,7 @@ pip install scipy matplotlib
 
 ### Usage
 ```bash
-# follow waypoints (-w x1 y1 z1 -w x2 y2 z2 -w x3 y3 z3 -w ... -T total simulation time)
+# follow waypoints (-w x1 y1 z1 -w x2 y2 z2 -w x3 y3 z3 -w ... -T total simulation time). The quadrotor starts from the origin.
 python 3D_quadrotor.py -T 20 -w 1 1 1 -w 1 1 2 -w 0 0 0
 # track a randomly genearted trajectory
 python 3D_quadrotor.py --seed 0
