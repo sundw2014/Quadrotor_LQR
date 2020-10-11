@@ -1,6 +1,8 @@
 # This file is subject to the terms and conditions defined in
 # file 'LICENSE', which is part of this source code package.
 import numpy as np
+import sys
+sys.path.append('rrt-algorithms/')
 
 from src.rrt.rrt_star import RRTStar
 from src.search_space.search_space import SearchSpace
@@ -14,21 +16,23 @@ def interpolate(wp_in):
     v = 1.
     wp_out = []
     t = []
-    for i in range(len(wp_in)-1):
-        p1 = wp_in[i]
-        p2 = wp_in[i+1]
+    currtent_t = 0.
+    for i in range(wp_in.shape[0]-1):
+        p1 = wp_in[i, :]
+        p2 = wp_in[i+1, :]
         dist = np.sqrt(((p2 - p1)**2).sum())
         unit = (p2 - p1) / dist
         T = dist / v
         local_t = np.arange(0., T, dt)
         wp_out += [p1+lt*v*unit for lt in local_t]
-        t += (local_t+t[-1]+dt).tolist()
-    t.append(t[-1]+dt)
-    wp_out.append(wp_in[-1])
-    return wp_out, t
+        t += (local_t+currtent_t).tolist()
+        currtent_t = t[-1] + dt
+    t.append(currtent_t)
+    wp_out.append(wp_in[-1,:])
+    return np.array(wp_out), np.array(t)
 
 
-def plan(x_init, x_goal, x_bound, obstacles)
+def plan(x_init, x_goal, x_bound, obstacles):
     Q = np.array([(8, 4)])  # length of tree edges
     r = 1  # length of smallest edge to check for intersection with obstacles
     max_samples = 1024  # max number of samples to take before timing out
@@ -39,7 +43,7 @@ def plan(x_init, x_goal, x_bound, obstacles)
     X = SearchSpace(x_bound, obstacles)
 
     # create rrt_search
-    rrt = RRTStar(X, Q, x_init, x_goal, max_samples, r, prc, rewire_count)
+    rrt = RRTStar(X, Q, tuple(x_init), tuple(x_goal), max_samples, r, prc, rewire_count)
     path = rrt.rrt_star()
 
     return np.array(path) # N x 3
@@ -57,14 +61,14 @@ class Controller(object):
         self.reset(x_init, x_goal, x_bound, obstacles)
 
     def reset(self, x_init, x_goal, x_bound, obstacles):
-        self.x_init = x_init if x_init
-        self.x_goal = x_goal if x_goal
-        self.x_bound = x_bound if x_bound
-        self.obstacles = obstacles if obstacles
-        if self.x_init and self.x_goal and self.x_bound and self.obstacles:
-            path = plan(self.x_init, self.x_goal, self.x_bound, self.obstacles)
+        if x_init is not None: self.x_init = x_init
+        if x_goal is not None: self.x_goal = x_goal
+        if x_bound is not None: self.x_bound = x_bound
+        if obstacles is not None: self.obstacles = obstacles
+        if all(v is not None for v in [self.x_init, self.x_goal, self.x_bound, self.obstacles]):
+            path = plan(self.x_init[:3], self.x_goal, self.x_bound, self.obstacles)
             self.waypoints, self.t = interpolate(path)
-            self.xref, self.uref = LQR.simulate(x_init, self.waypoints, self.t)
+            self.xref, self.uref = LQR.simulate(self.x_init, self.waypoints, self.t)
 
     def __call__(self, xcurr):
         dist = ((xcurr.reshape(1,-1)[:, :3] - self.xref[:, :3])**2).sum(axis=1)
@@ -77,30 +81,42 @@ class Controller(object):
 
 if __name__ == '__main__':
     import scipy
-    from scipy.integrate import odeint
+    # from scipy.integrate import odeint
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
     from ol_dynamics import g, f, A, B
 
-    x_init = (-9., -9, -9)  # starting location
-    x_goal = ( 9.,  9,  9)  # goal location
+    x_init = [0., 0, 0] + [0.,]*5  # starting location
+    x_goal = (9.,  9,  9)  # goal location
     x_bound = np.array([(-10., 10), (-10, 10), (-10, 10)])  # dimensions of Search Space
     obstacles = np.array(
         [(2, 2, 2, 4, 4, 4), (2, 2, 6, 4, 4, 8), (2, 6, 2, 4, 8, 4), (6, 6, 2, 8, 8, 4),
          (6, 2, 2, 8, 4, 4), (6, 2, 6, 8, 4, 8), (2, 6, 6, 4, 8, 8), (6, 6, 6, 8, 8, 8)])
 
-    controller = Controller('data/model.pth', x_init, x_goal, x_bound, obstacles)
+    controller = Controller('data/model_best.pth.tar', x_init, x_goal, x_bound, obstacles)
+
+    def odeint(f, x0, t, args=()):
+        x = [np.array(x0),]
+        for idx in range(len(t)-1):
+            dot_x = f(x[-1], t, *args)
+            x.append(x[-1] + dot_x*(t[idx+1]-t[idx]))
+        return np.array(x)
 
     def simulate(X0, t):
         def cl_dynamics(x, t, u):
             # closed-loop dynamics. u should be a function
-            x = np.array(x)
+            # x = np.array(x)
+            # dis = t - u.t
+            # dis[dis < 0] = np.inf
+            # idx = dis.argmin()
+            # dot_x = f(x, u(x, u.xref[idx,:], u.uref[idx,:]))
             dot_x = f(x, u(x))
             return dot_x
         x_nl = odeint(cl_dynamics, X0, t, args=(controller,))
         return x_nl
 
-    x = simulate(x_init + np.random.randn(3), controller.t)
+    # x = simulate(np.array(x_init) + np.concatenate([1.*np.random.randn(3), np.random.randn(5)]), controller.t)
+    x = simulate(np.array(x_init) + np.concatenate([np.array([1.,1,-1]), np.random.randn(5)]), controller.t)
     xref = controller.xref
     waypoints = np.array(controller.waypoints)
 

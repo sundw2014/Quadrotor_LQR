@@ -79,7 +79,7 @@ def simulate_nonlinear(X0, ref, t):
 def simulate(X0, ref, t):
     xref = simulate_nonlinear(X0, ref, t)
     u = tracking_controller(ref, t)
-    uref = [u(x, t) for (x, t) in zip(xref, t)]
+    uref = np.array([u(x, t) for (x, t) in zip(xref, t)])
     return xref, uref
 
 
