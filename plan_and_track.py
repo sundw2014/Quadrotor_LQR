@@ -8,9 +8,8 @@ from src.search_space.search_space import SearchSpace
 import LQR
 import C3M
 
-
 def interpolate(wp_in):
-    dt = 0.01
+    dt = 0.001
     v = 1.
     wp_out = []
     t = []
@@ -31,6 +30,8 @@ def interpolate(wp_in):
 
 
 def plan(x_init, x_goal, x_bound, obstacles):
+    import random
+    random.seed(0)
     Q = np.array([(8, 4)])  # length of tree edges
     r = 1  # length of smallest edge to check for intersection with obstacles
     max_samples = 1024  # max number of samples to take before timing out
@@ -69,6 +70,7 @@ class Controller(object):
             self.xref, self.uref = LQR.simulate(self.x_init, self.waypoints, self.t)
 
     def __call__(self, xcurr):
+    # def __call__(self, xcurr, xref, uref):
         dist = ((xcurr.reshape(1,-1)[:, :3] - self.xref[:, :3])**2).sum(axis=1)
         idx = dist.argmin()
         xref = self.xref[idx, :]
@@ -80,11 +82,12 @@ class Controller(object):
 if __name__ == '__main__':
     import scipy
     # from scipy.integrate import odeint
+    from LQR import odeint
     import matplotlib.pyplot as plt
     from mpl_toolkits.mplot3d import Axes3D
     from ol_dynamics import g, f, A, B
 
-    x_init = [0., 0, 0] + [0.,]*5  # starting location
+    x_init = [0., 0, 0] + [0.,]*5  # starting location and other state variables
     x_goal = (9.,  9,  9)  # goal location
     x_bound = np.array([(-10., 10), (-10, 10), (-10, 10)])  # dimensions of Search Space
     obstacles = np.array(
@@ -93,40 +96,39 @@ if __name__ == '__main__':
 
     controller = Controller('data/model_best.pth.tar', x_init, x_goal, x_bound, obstacles)
 
-    def odeint(f, x0, t, args=()):
-        x = [np.array(x0),]
-        for idx in range(len(t)-1):
-            dot_x = f(x[-1], t, *args)
-            x.append(x[-1] + dot_x*(t[idx+1]-t[idx]))
-        return np.array(x)
 
     def simulate(X0, t):
         def cl_dynamics(x, t, u):
             # closed-loop dynamics. u should be a function
+
             # x = np.array(x)
             # dis = t - u.t
             # dis[dis < 0] = np.inf
             # idx = dis.argmin()
             # dot_x = f(x, u(x, u.xref[idx,:], u.uref[idx,:]))
+            # dot_x = f(x, u.uref[idx,:])
+
             dot_x = f(x, u(x))
             return dot_x
         x_nl = odeint(cl_dynamics, X0, t, args=(controller,))
         return x_nl
 
-    # x = simulate(np.array(x_init) + np.concatenate([1.*np.random.randn(3), np.random.randn(5)]), controller.t)
-    x = simulate(np.array(x_init) + np.concatenate([np.array([1.,1,-1]), np.random.randn(5)]), controller.t)
+    x = simulate(np.array(x_init) + np.concatenate([1.*np.random.randn(3), np.random.randn(5)]), controller.t)
+    # x = simulate(np.array(x_init) + np.concatenate([np.array([1.,1,-1]), 0.*np.random.randn(5)]), controller.t)
+    # x = simulate(np.array(x_init), controller.t)
     xref = controller.xref
     waypoints = np.array(controller.waypoints)
 
     ######################## plot #######################
-
+    # from IPython import embed;embed()
     fig = plt.figure(figsize=(20, 10))
     track = fig.add_subplot(1, 1, 1, projection="3d")
 
-    track.plot(x[:, 0], x[:, 1], x[:, 2], color="r", label="x")
-    track.plot(xref[:, 0], xref[:, 1], xref[:, 2], color="b", label="xref")
     track.plot(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2], color="g", label="waypoints")
+    track.plot(xref[:, 0], xref[:, 1], xref[:, 2], color="b", label="xref")
+    track.plot(x[:, 0], x[:, 1], x[:, 2], color="r", label="x")
 
+    # print(x[-1,:])
     track.set_xlabel('x')
     track.set_ylabel('y')
     track.set_zlabel('z')

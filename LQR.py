@@ -4,11 +4,18 @@
 import argparse
 import numpy as np
 import scipy
-from scipy.integrate import odeint
+import scipy.linalg
+# from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from ol_dynamics import g, f, A, B
 
+def odeint(f, x0, t, args=()):
+    x = [np.array(x0),]
+    for idx in range(len(t)-1):
+        dot_x = f(x[-1], t[idx], *args)
+        x.append(x[-1] + dot_x*(t[idx+1]-t[idx]))
+    return np.array(x)
 
 def lqr(A, B, Q, R):
     """Solve the continuous time lqr controller.
@@ -77,6 +84,7 @@ def simulate_nonlinear(X0, ref, t):
     return x_nl
 
 def simulate(X0, ref, t):
+    # import ipdb; ipdb.set_trace()
     xref = simulate_nonlinear(X0, ref, t)
     u = tracking_controller(ref, t)
     uref = np.array([u(x, t) for (x, t) in zip(xref, t)])
