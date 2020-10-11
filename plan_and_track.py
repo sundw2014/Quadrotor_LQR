@@ -6,13 +6,8 @@ from src.rrt.rrt_star import RRTStar
 from src.search_space.search_space import SearchSpace
 
 import LQR
+import C3M
 
-# Obstacles = np.array(
-#     [(20, 20, 20, 40, 40, 40), (20, 20, 60, 40, 40, 80), (20, 60, 20, 40, 80, 40), (60, 60, 20, 80, 80, 40),
-#      (60, 20, 20, 80, 40, 40), (60, 20, 60, 80, 40, 80), (20, 60, 60, 40, 80, 80), (60, 60, 60, 80, 80, 80)])
-# x_init = (0, 0, 0)  # starting location
-# x_goal = (100, 100, 100)  # goal location
-# x_bound = np.array([(-10, 10), (-10, 10), (-10, 10)])  # dimensions of Search Space
 
 def interpolate(wp_in):
     dt = 0.01
@@ -53,7 +48,7 @@ class Controller(object):
     """docstring for Controller"""
     def __init__(self, C3M_file, x_init=None, x_goal=None, x_bound=None, obstacles=None):
         super(Controller, self).__init__()
-        self.C3M = model(C3M_file)
+        self.C3M = C3M.get_model(C3M_file)
         self.x_init = None
         self.x_goal = None
         self.x_bound = None
@@ -76,6 +71,51 @@ class Controller(object):
         idx = dist.argmin()
         xref = self.xref[idx, :]
         uref = self.uref[idx, :]
-        xe = xref - xcurr
+        xe = xcurr - xref
         u = self.C3M(xcurr, xe, uref)
         return u
+
+if __name__ == '__main__':
+    import scipy
+    from scipy.integrate import odeint
+    import matplotlib.pyplot as plt
+    from mpl_toolkits.mplot3d import Axes3D
+    from ol_dynamics import g, f, A, B
+
+    x_init = (-9., -9, -9)  # starting location
+    x_goal = ( 9.,  9,  9)  # goal location
+    x_bound = np.array([(-10., 10), (-10, 10), (-10, 10)])  # dimensions of Search Space
+    obstacles = np.array(
+        [(2, 2, 2, 4, 4, 4), (2, 2, 6, 4, 4, 8), (2, 6, 2, 4, 8, 4), (6, 6, 2, 8, 8, 4),
+         (6, 2, 2, 8, 4, 4), (6, 2, 6, 8, 4, 8), (2, 6, 6, 4, 8, 8), (6, 6, 6, 8, 8, 8)])
+
+    controller = Controller('data/model.pth', x_init, x_goal, x_bound, obstacles)
+
+    def simulate(X0, t):
+        def cl_dynamics(x, t, u):
+            # closed-loop dynamics. u should be a function
+            x = np.array(x)
+            dot_x = f(x, u(x))
+            return dot_x
+        x_nl = odeint(cl_dynamics, X0, t, args=(controller,))
+        return x_nl
+
+    x = simulate(x_init + np.random.randn(3), controller.t)
+    xref = controller.xref
+    waypoints = np.array(controller.waypoints)
+
+    ######################## plot #######################
+
+    fig = plt.figure(figsize=(20, 10))
+    track = fig.add_subplot(1, 1, 1, projection="3d")
+
+    track.plot(x[:, 0], x[:, 1], x[:, 2], color="r", label="x")
+    track.plot(xref[:, 0], xref[:, 1], xref[:, 2], color="b", label="xref")
+    track.plot(waypoints[:, 0], waypoints[:, 1], waypoints[:, 2], color="g", label="waypoints")
+
+    track.set_xlabel('x')
+    track.set_ylabel('y')
+    track.set_zlabel('z')
+    track.legend(loc='lower left', shadow=True, fontsize='small')
+
+    plt.show()
