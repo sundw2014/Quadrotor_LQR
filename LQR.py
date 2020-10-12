@@ -1,11 +1,7 @@
-# 3D Control of Quadcopter
-# based on https://github.com/juanmed/quadrotor_sim/blob/master/3D_Quadrotor/3D_control_with_body_drag.py
-
 import argparse
 import numpy as np
 import scipy
 import scipy.linalg
-# from scipy.integrate import odeint
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from ol_dynamics import g, f, A, B
@@ -45,9 +41,7 @@ Q[1, 1] = 10.
 Q[2, 2] = 10.
 R = np.diag([1., 1., 1.])
 K, _, _ = lqr(A, B, Q, R)
-# K[np.abs(K) < 1e-5] = 0
-# print('K = ')
-# print(K)
+
 
 ##### helper functions for simulation ##########
 def tracking_controller(ref, t):
@@ -83,8 +77,8 @@ def simulate_nonlinear(X0, ref, t):
     x_nl = odeint(cl_dynamics, X0, t, args=(u,))
     return x_nl
 
+
 def simulate(X0, ref, t):
-    # import ipdb; ipdb.set_trace()
     xref = simulate_nonlinear(X0, ref, t)
     u = tracking_controller(ref, t)
     uref = np.array([u(x, t) for (x, t) in zip(xref, t)])
